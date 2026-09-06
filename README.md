@@ -2,7 +2,7 @@
 
 **VirtualScreenMonitor** is a high-performance, ultra-low-latency remote display streaming application for Windows. It provides seamless desktop streaming of physical monitors and secondary virtual displays with **less than 100ms latency**.
 
-<img width="1024" height="575" alt="screenshot" src="https://github.com/user-attachments/assets/6490c26c-fdf6-4fba-873f-a5febebe9b3a" />
+![VirtualScreenMonitor Preview](screenshot.png)
 
 ---
 
@@ -31,18 +31,48 @@ install.bat
 ```
 
 ### 2. Start the Server
-Run the batch launcher or Python script:
+Run the batch launcher or executable:
 ```cmd
 start_server.bat
 ```
-*(Or manually: `python vddmon_server.py run`)*
+*(Or manually: `python vddmon_server.py run` or `VirtualScreenMonitor_Server.exe run`)*
+
+#### Server Command-Line Arguments & Commands
+Both `vddmon_server.py` and the compiled server executables (`VirtualScreenMonitor_Server.exe` / `VirtualScreenMonitor_Server_Headless.exe`) support the following commands and arguments:
+
+```cmd
+VirtualScreenMonitor_Server.exe [command] [options]
+# Or with Python:
+python vddmon_server.py [command] [options]
+```
+
+##### Commands:
+| Command | Description |
+|---|---|
+| `run` *(default)* | Run the VDDMon server streaming daemon. |
+| `pair` | Generate an ephemeral P2P pairing token and start the server. |
+| `passwd -p <password>` | Set or update the server master authentication password. |
+| `ip` | List all detected local, LAN, and WireGuard connection IP addresses. |
+| `qr` | Render a connection and pairing ASCII QR code in the terminal. |
+| `install` | Configure autostart service and initialize display drivers. |
+| `uninstall` | Clean up virtual displays and remove background autostart tasks. |
+
+##### Options & Flags:
+| Flag | Description | Default |
+|---|---|---|
+| `--host <IP>`, `--bind <IP>` | Listening IP address (e.g. `0.0.0.0` for all, `10.0.0.1` for WireGuard, `127.0.0.1` for local loopback). | `0.0.0.0` |
+| `--port <PORT>`, `-p <PORT>` | Listening TCP port. | `5900` |
+| `--monitor <INDEX>`, `-m <INDEX>` | Monitor index to capture (e.g. `0` for primary physical display). | Auto-detect virtual display |
+| `--pair` | Generate ephemeral P2P pairing token and listen. | Disabled |
+
+---
 
 ### 3. Start the Client
-Run the client launcher or Python script:
+Run the client launcher or executable:
 ```cmd
 start_client.bat
 ```
-*(Or manually: `python vddmon_client.py`)*
+*(Or manually: `python vddmon_client.py` or `VirtualScreenMonitor_Client.exe`)*
 
 Enter the host IP address (e.g. `127.0.0.1` for local testing or your LAN/WireGuard IP) and click **Connect**.
 

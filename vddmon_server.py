@@ -263,6 +263,9 @@ user32.DrawIconEx.argtypes = [
 ]
 user32.ClipCursor.restype = wintypes.BOOL
 user32.ClipCursor.argtypes = [ctypes.POINTER(wintypes.RECT)]
+user32.GetClipCursor.restype = wintypes.BOOL
+user32.GetClipCursor.argtypes = [ctypes.POINTER(wintypes.RECT)]
+
 
 class DEVMODEW(ctypes.Structure):
     _fields_ = [
@@ -474,9 +477,10 @@ def cursor_barrier_worker():
     """Continuously monitors cursor position and prevents physical host mouse from escaping into virtual monitor space,
     while preserving uninhibited injection and interaction from remote clients."""
     global PHYSICAL_BOUNDS, IS_INJECTING
+    attach_input_desktop()
     pt = POINT()
+    cur_clip = wintypes.RECT()
     last_bounds_check = 0.0
-    last_clip_time = 0.0
     min_x, min_y, max_x, max_y = 0, 0, 1920, 1080
     phys_rc = None
 
@@ -486,7 +490,8 @@ def cursor_barrier_worker():
             if now - last_bounds_check > 2.0 or PHYSICAL_BOUNDS is None:
                 PHYSICAL_BOUNDS = get_physical_desktop_bounds()
                 min_x, min_y, max_x, max_y = PHYSICAL_BOUNDS
-                phys_rc = wintypes.RECT(min_x, min_y, max_x, max_y)
+                # Win32 ClipCursor coordinates are inclusive; exclude the virtual monitor border pixel
+                phys_rc = wintypes.RECT(min_x, min_y, max_x - 1, max_y - 1)
                 last_bounds_check = now
 
             # If client is injecting or actively dragging on Screen 2: DO NOT clamp the cursor
@@ -495,21 +500,26 @@ def cursor_barrier_worker():
                 is_active = True
 
             if not is_active and phys_rc is not None:
-                # Keep ClipCursor engaged on physical monitors so cursor cannot cross to virtual screens
-                if now - last_clip_time > 0.2:
+                # Fast check: If Windows, focus changes, or another app dropped the clip, re-engage immediately!
+                user32.GetClipCursor(ctypes.byref(cur_clip))
+                if (cur_clip.left != phys_rc.left or cur_clip.top != phys_rc.top or
+                    cur_clip.right != phys_rc.right or cur_clip.bottom != phys_rc.bottom):
                     user32.ClipCursor(ctypes.byref(phys_rc))
-                    last_clip_time = now
 
-                if user32.GetCursorPos(ctypes.byref(pt)):
-                    cx, cy = pt.x, pt.y
-                    clamped_x = max(min_x, min(max_x - 1, cx))
-                    clamped_y = max(min_y, min(max_y - 1, cy))
-                    if clamped_x != cx or clamped_y != cy:
-                        user32.SetCursorPos(clamped_x, clamped_y)
-                        user32.ClipCursor(ctypes.byref(phys_rc))
+                # Watchdog clamp: Ensure cursor stays inside physical bounds
+                if not user32.GetCursorPos(ctypes.byref(pt)):
+                    attach_input_desktop()
+                    user32.GetCursorPos(ctypes.byref(pt))
+
+                cx, cy = pt.x, pt.y
+                if cx < min_x or cx >= max_x or cy < min_y or cy >= max_y:
+                    clamped_x = max(min_x, min(max_x - 4, cx))
+                    clamped_y = max(min_y, min(max_y - 4, cy))
+                    user32.SetCursorPos(clamped_x, clamped_y)
+                    user32.ClipCursor(ctypes.byref(phys_rc))
         except Exception:
             pass
-        time.sleep(0.01)
+        time.sleep(0.005)
 
 # ---------------------------------------------------------------- GPU 3D & Gaming Monitor
 class GPUMonitor:
@@ -1484,8 +1494,10 @@ class Injector:
                 user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
             except Exception:
                 pass
-        # Note: On normal hover (button_mask == 0), DO NOT call SetCursorPos.
-        # The user's physical mouse stays firmly on Screen 1.
+        else:
+            # Normal hover: Ensure IS_INJECTING is never stuck
+            if IS_INJECTING and not self.button_mask:
+                IS_INJECTING = False
 
     def click(self, mask):
         diff = mask ^ self.button_mask
@@ -1501,7 +1513,13 @@ class Injector:
         if mask != 0 and self.button_mask == 0:
             pt = POINT()
             if user32.GetCursorPos(ctypes.byref(pt)) and (pt.x != 0 or pt.y != 0):
-                self.drag_orig_pt = (pt.x, pt.y)
+                if PHYSICAL_BOUNDS and (PHYSICAL_BOUNDS[0] <= pt.x < PHYSICAL_BOUNDS[2] and PHYSICAL_BOUNDS[1] <= pt.y < PHYSICAL_BOUNDS[3]):
+                    self.drag_orig_pt = (pt.x, pt.y)
+                elif PHYSICAL_BOUNDS:
+                    self.drag_orig_pt = ((PHYSICAL_BOUNDS[0] + PHYSICAL_BOUNDS[2]) // 2,
+                                         (PHYSICAL_BOUNDS[1] + PHYSICAL_BOUNDS[3]) // 2)
+                else:
+                    self.drag_orig_pt = (960, 540)
             elif PHYSICAL_BOUNDS:
                 self.drag_orig_pt = ((PHYSICAL_BOUNDS[0] + PHYSICAL_BOUNDS[2]) // 2,
                                      (PHYSICAL_BOUNDS[1] + PHYSICAL_BOUNDS[3]) // 2)
@@ -1544,7 +1562,7 @@ class Injector:
                     self.drag_orig_pt = None
                 if PHYSICAL_BOUNDS:
                     try:
-                        rc = wintypes.RECT(PHYSICAL_BOUNDS[0], PHYSICAL_BOUNDS[1], PHYSICAL_BOUNDS[2], PHYSICAL_BOUNDS[3])
+                        rc = wintypes.RECT(PHYSICAL_BOUNDS[0], PHYSICAL_BOUNDS[1], PHYSICAL_BOUNDS[2] - 1, PHYSICAL_BOUNDS[3] - 1)
                         user32.ClipCursor(ctypes.byref(rc))
                     except Exception:
                         pass
