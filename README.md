@@ -2,7 +2,7 @@
 
 **VirtualScreenMonitor** is a high-performance, ultra-low-latency remote display streaming application for Windows. It provides seamless desktop streaming of physical monitors and secondary virtual displays with **less than 100ms latency**.
 
-![VirtualScreenMonitor Preview](screenshot.png)
+<img width="1024" height="575" alt="screenshot" src="https://github.com/user-attachments/assets/fcdcf192-99af-4c09-acff-f381e241516a" />
 
 ---
 
