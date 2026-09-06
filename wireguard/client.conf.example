@@ -1,0 +1,18 @@
+# VDDMon WireGuard Client Configuration Example
+# Save as 'wireguard\client.conf' or 'client.conf' in the client workspace directory.
+
+[Interface]
+# Client VPN address
+Address = 10.0.0.2/24
+# Client private key
+PrivateKey = <REPLACE_WITH_CLIENT_PRIVATE_KEY>
+
+[Peer]
+# Server public key
+PublicKey = <REPLACE_WITH_SERVER_PUBLIC_KEY>
+# Host's public WAN IP or DDNS hostname and port (e.g. yourhome.duckdns.org:51820)
+Endpoint = <SERVER_PUBLIC_IP_OR_HOSTNAME>:51820
+# Route only VPN subnet through WireGuard (split-tunnel so normal internet is untouched)
+AllowedIPs = 10.0.0.0/24
+# Keep stateful NAT/firewall open (vital for mobile/coffee-shop Wi-Fi)
+PersistentKeepalive = 25

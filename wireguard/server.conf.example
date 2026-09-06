@@ -1,0 +1,21 @@
+# VDDMon WireGuard Server Configuration Example
+# Save as 'wireguard\server.conf' or 'server.conf' in the project directory.
+#
+# Generate keys in PowerShell:
+#   $priv = & "C:\Program Files\WireGuard\wg.exe" genkey
+#   $pub = $priv | & "C:\Program Files\WireGuard\wg.exe" pubkey
+#   Write-Host "Private: $priv `nPublic: $pub"
+
+[Interface]
+# Server VPN address (VDDMon host listens here)
+Address = 10.0.0.1/24
+# WireGuard UDP listening port (forward this port on your WAN router if connecting remotely)
+ListenPort = 51820
+# Server private key
+PrivateKey = <REPLACE_WITH_SERVER_PRIVATE_KEY>
+
+[Peer]
+# Client public key
+PublicKey = <REPLACE_WITH_CLIENT_PUBLIC_KEY>
+# Client VPN IP
+AllowedIPs = 10.0.0.2/32
