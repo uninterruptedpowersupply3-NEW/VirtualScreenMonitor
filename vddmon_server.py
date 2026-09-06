@@ -107,6 +107,11 @@ gdi32  = ctypes.windll.gdi32
 kernel32 = ctypes.windll.kernel32
 winmm = getattr(ctypes.windll, "winmm", None)
 
+class _SafeNullStream:
+    def write(self, *a, **k): pass
+    def flush(self): pass
+    def isatty(self): return False
+
 try:
     kernel32.AttachConsole.argtypes = [wintypes.DWORD]
     kernel32.AttachConsole.restype = wintypes.BOOL
@@ -115,11 +120,14 @@ try:
             sys.stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)
             sys.stderr = open("CONOUT$", "w", encoding="utf-8", buffering=1)
         except Exception: pass
-    elif sys.stdout is None:
-        sys.stdout = open(os.devnull, "w")
-        sys.stderr = open(os.devnull, "w")
+    if sys.stdout is None:
+        sys.stdout = _SafeNullStream()
+    if sys.stderr is None:
+        sys.stderr = _SafeNullStream()
 except Exception:
-    pass
+    if sys.stdout is None: sys.stdout = _SafeNullStream()
+    if sys.stderr is None: sys.stderr = _SafeNullStream()
+
 
 user32.GetDC.restype = wintypes.HDC
 user32.GetDC.argtypes = [wintypes.HWND]
@@ -2923,12 +2931,7 @@ def cmd_run(args):
     bind_host = getattr(args, "host", None) or "0.0.0.0"
     bind_port = getattr(args, "port", None) or 5900
 
-    try:
-        f = open(LOCK_F, "x"); f.write(str(os.getpid())); f.close()
-        atexit.register(lambda: LOCK_F.unlink(missing_ok=True))
-        atexit.register(unclip_and_recenter_cursor)
-        atexit.register(cleanup_virtual_displays)
-    except FileExistsError:
+    if LOCK_F.exists():
         is_alive = False
         try:
             old_pid = int(LOCK_F.read_text().strip())
@@ -2937,7 +2940,7 @@ def cmd_run(args):
                 exit_code = wintypes.DWORD()
                 if kernel32.GetExitCodeProcess(h_proc, ctypes.byref(exit_code)):
                     is_alive = (exit_code.value == 259) # STILL_ACTIVE
-                    kernel32.CloseHandle(h_proc)
+                kernel32.CloseHandle(h_proc)
         except Exception: pass
         if is_alive:
             try:
@@ -2945,8 +2948,15 @@ def cmd_run(args):
                 s = socket.create_connection((check_host, bind_port), 2)
                 s.close(); say("already running on " + str(check_host) + ":" + str(bind_port)); sys.exit(2)
             except Exception: pass
-        LOCK_F.unlink(missing_ok=True)
-        return cmd_run(args)
+        try: LOCK_F.unlink(missing_ok=True)
+        except Exception: pass
+
+    try:
+        LOCK_F.write_text(str(os.getpid()))
+        atexit.register(lambda: LOCK_F.unlink(missing_ok=True))
+        atexit.register(unclip_and_recenter_cursor)
+        atexit.register(cleanup_virtual_displays)
+    except Exception: pass
 
     prio = 0x40
     kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), prio)
@@ -2979,7 +2989,10 @@ def cmd_run(args):
                 upnp_port=ep.get("upnp_port"),
                 validity_sec=120
             )
-            ACTIVE_PAIRING_SESSION.print_cli()
+            if hasattr(ACTIVE_PAIRING_SESSION, "print_cli"):
+                ACTIVE_PAIRING_SESSION.print_cli()
+            elif hasattr(ACTIVE_PAIRING_SESSION, "print_qr"):
+                ACTIVE_PAIRING_SESSION.print_qr()
         else:
             say("warning: vddmon_p2p not available, cannot initialize P2P pairing")
 

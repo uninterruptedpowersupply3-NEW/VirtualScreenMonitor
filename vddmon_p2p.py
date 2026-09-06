@@ -216,9 +216,20 @@ class PairingSession:
         print("-" * 65)
 
         if qrcode:
-            qr = qrcode.QRCode(border=1)
-            qr.add_data(self.uri)
-            qr.print_ascii(invert=True)
+            try:
+                if hasattr(sys.stdout, "reconfigure"):
+                    try: sys.stdout.reconfigure(encoding="utf-8")
+                    except Exception: pass
+                qr = qrcode.QRCode(border=1)
+                qr.add_data(self.uri)
+                qr.print_ascii(invert=True)
+            except Exception:
+                try:
+                    matrix = qr.get_matrix()
+                    for row in matrix:
+                        print("".join("##" if cell else "  " for cell in row))
+                except Exception:
+                    pass
         else:
             print("[*] (Install 'qrcode' module for terminal ASCII QR rendering)")
 
@@ -228,6 +239,11 @@ class PairingSession:
         print("\nCompact Base64 Pairing Token:")
         print(f"  {self.token_str}")
         print("=" * 65 + "\n")
+
+    def print_cli(self):
+        """Displays formatted ASCII QR code and pairing token in CLI."""
+        return self.print_qr()
+
 
 
 # ---------------------------------------------------------------- Silent-Drop Server Handshake
